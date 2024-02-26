@@ -146,7 +146,7 @@ public class FabricPingCounter extends TaskSystem.Task implements FabricListener
     }
 
     private int getPing(ServerPlayerEntity player) {
-        return player.networkHandler.getLatency();
+        return player.pingMilliseconds;
     }
 
     public void onPlayerJoin(ServerPlayerEntity player) {
