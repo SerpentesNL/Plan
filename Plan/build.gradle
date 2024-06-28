@@ -16,8 +16,8 @@ plugins {
     id 'java-library'
     id "jacoco"
     id "checkstyle"
-    id "org.sonarqube" version "4.4.1.3373"
-    id 'fabric-loom' version '1.3-SNAPSHOT' apply false
+    id "org.sonarqube" version "5.0.0.4638"
+    id 'fabric-loom' version '1.6-SNAPSHOT' apply false
 }
 
 apply plugin: 'nebula-aggregate-javadocs'
@@ -69,9 +69,9 @@ subprojects {
     }
 
     ext {
-        daggerVersion = "2.50"
+        daggerVersion = "2.51.1"
 
-        palVersion = "5.1.0"
+        palVersion = "5.2.0"
 
         bukkitVersion = "1.13.2-R0.1-SNAPSHOT"
         spigotVersion = "1.13.2-R0.1-SNAPSHOT"
@@ -83,22 +83,22 @@ subprojects {
         redisBungeeVersion = "0.3.8-SNAPSHOT"
         redisBungeeProxioDevVersion = "0.7.3"
 
-        commonsTextVersion = "1.11.0"
-        commonsCompressVersion = "1.25.0"
-        commonsCodecVersion = "1.16.1"
+        commonsTextVersion = "1.12.0"
+        commonsCompressVersion = "1.26.2"
+        commonsCodecVersion = "1.17.0"
         caffeineVersion = "3.1.8"
-        jettyVersion = "11.0.20"
+        jettyVersion = "11.0.21"
         caffeineVersion = "2.9.2"
-        mysqlVersion = "8.3.0"
-        mariadbVersion = "3.3.2"
-        sqliteVersion = "3.45.1.0"
-        adventureVersion = "4.14.0"
+        mysqlVersion = "8.4.0"
+        mariadbVersion = "3.4.0"
+        sqliteVersion = "3.42.0.1"
+        adventureVersion = "4.17.0"
         hikariVersion = "5.1.0"
-        slf4jVersion = "2.0.11"
+        slf4jVersion = "2.0.13"
         geoIpVersion = "4.2.0"
-        gsonVersion = "2.10.1"
+        gsonVersion = "2.11.0"
         dependencyDownloadVersion = "1.3.1"
-        ipAddressMatcherVersion = "5.4.2"
+        ipAddressMatcherVersion = "5.5.0"
         jasyptVersion = "1.9.3"
 
         bstatsVersion = "3.0.2"
@@ -106,9 +106,10 @@ subprojects {
         nkPlaceholderapiVersion = "1.4-SNAPSHOT"
 
         junitVersion = "5.10.2"
-        mockitoVersion = "5.10.0"
-        testContainersVersion = "1.19.5"
-        swaggerVersion = "2.2.20"
+        mockitoVersion = "5.12.0"
+        seleniumVersion = "4.21.0"
+        testContainersVersion = "1.19.8"
+        swaggerVersion = "2.2.22"
     }
 
     repositories {

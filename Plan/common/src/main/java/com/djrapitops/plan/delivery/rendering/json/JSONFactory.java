@@ -18,6 +18,7 @@ package com.djrapitops.plan.delivery.rendering.json;
 
 import com.djrapitops.plan.delivery.domain.DateObj;
 import com.djrapitops.plan.delivery.domain.RetentionData;
+import com.djrapitops.plan.delivery.domain.datatransfer.PlayerJoinAddresses;
 import com.djrapitops.plan.delivery.domain.datatransfer.ServerDto;
 import com.djrapitops.plan.delivery.domain.mutators.PlayerKillMutator;
 import com.djrapitops.plan.delivery.domain.mutators.SessionsMutator;
@@ -34,6 +35,7 @@ import com.djrapitops.plan.identification.Server;
 import com.djrapitops.plan.identification.ServerInfo;
 import com.djrapitops.plan.identification.ServerUUID;
 import com.djrapitops.plan.settings.config.PlanConfig;
+import com.djrapitops.plan.settings.config.paths.DataGatheringSettings;
 import com.djrapitops.plan.settings.config.paths.DisplaySettings;
 import com.djrapitops.plan.settings.config.paths.TimeSettings;
 import com.djrapitops.plan.settings.locale.Locale;
@@ -48,6 +50,7 @@ import com.djrapitops.plan.storage.database.queries.analysis.PlayerRetentionQuer
 import com.djrapitops.plan.storage.database.queries.objects.*;
 import com.djrapitops.plan.storage.database.queries.objects.playertable.NetworkTablePlayersQuery;
 import com.djrapitops.plan.storage.database.queries.objects.playertable.ServerTablePlayersQuery;
+import com.djrapitops.plan.storage.database.sql.tables.JoinAddressTable;
 import com.djrapitops.plan.utilities.comparators.SessionStartComparator;
 import com.djrapitops.plan.utilities.dev.Untrusted;
 import com.djrapitops.plan.utilities.java.Maps;
@@ -160,14 +163,52 @@ public class JSONFactory {
         return db.query(PlayerRetentionQueries.fetchRetentionData());
     }
 
-    public Map<UUID, String> playerJoinAddresses(ServerUUID serverUUID) {
-        Database db = dbSystem.getDatabase();
-        return db.query(JoinAddressQueries.latestJoinAddressesOfPlayers(serverUUID));
+    private static void removeFiltered(Map<UUID, String> addressByPlayerUUID, List<String> filteredJoinAddresses) {
+        if (filteredJoinAddresses.isEmpty() || filteredJoinAddresses.equals(List.of("play.example.com"))) return;
+
+        Set<UUID> toRemove = new HashSet<>();
+        // Remove filtered addresses from the data
+        for (Map.Entry<UUID, String> entry : addressByPlayerUUID.entrySet()) {
+            if (filteredJoinAddresses.contains(entry.getValue())) {
+                toRemove.add(entry.getKey());
+            }
+        }
+        for (UUID playerUUID : toRemove) {
+            addressByPlayerUUID.put(playerUUID, JoinAddressTable.DEFAULT_VALUE_FOR_LOOKUP);
+        }
     }
 
-    public Map<UUID, String> playerJoinAddresses() {
+    public PlayerJoinAddresses playerJoinAddresses(ServerUUID serverUUID, boolean includeByPlayerMap) {
         Database db = dbSystem.getDatabase();
-        return db.query(JoinAddressQueries.latestJoinAddressesOfPlayers());
+        List<String> filteredJoinAddresses = config.get(DataGatheringSettings.FILTER_JOIN_ADDRESSES);
+        if (includeByPlayerMap) {
+            Map<UUID, String> addresses = db.query(JoinAddressQueries.latestJoinAddressesOfPlayers(serverUUID));
+
+            removeFiltered(addresses, filteredJoinAddresses);
+
+            return new PlayerJoinAddresses(
+                    addresses.values().stream().distinct().sorted().collect(Collectors.toList()),
+                    addresses
+            );
+        } else {
+            List<String> addresses = db.query(JoinAddressQueries.uniqueJoinAddresses(serverUUID));
+            addresses.removeAll(filteredJoinAddresses);
+            return new PlayerJoinAddresses(addresses, null);
+        }
+    }
+
+    public PlayerJoinAddresses playerJoinAddresses(boolean includeByPlayerMap) {
+        Database db = dbSystem.getDatabase();
+        List<String> filteredJoinAddresses = config.get(DataGatheringSettings.FILTER_JOIN_ADDRESSES);
+        List<String> unique = db.query(JoinAddressQueries.uniqueJoinAddresses());
+        unique.removeAll(filteredJoinAddresses);
+        if (includeByPlayerMap) {
+            Map<UUID, String> latest = db.query(JoinAddressQueries.latestJoinAddressesOfPlayers());
+            removeFiltered(latest, filteredJoinAddresses);
+            return new PlayerJoinAddresses(unique, latest);
+        } else {
+            return new PlayerJoinAddresses(unique, null);
+        }
     }
 
     public List<Map<String, Object>> serverSessionsAsJSONMap(ServerUUID serverUUID) {

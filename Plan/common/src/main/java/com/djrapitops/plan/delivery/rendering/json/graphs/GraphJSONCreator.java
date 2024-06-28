@@ -32,7 +32,6 @@ import com.djrapitops.plan.delivery.rendering.json.graphs.line.LineGraphFactory;
 import com.djrapitops.plan.delivery.rendering.json.graphs.line.PingGraph;
 import com.djrapitops.plan.delivery.rendering.json.graphs.line.Point;
 import com.djrapitops.plan.delivery.rendering.json.graphs.pie.Pie;
-import com.djrapitops.plan.delivery.rendering.json.graphs.pie.PieSlice;
 import com.djrapitops.plan.delivery.rendering.json.graphs.pie.WorldPie;
 import com.djrapitops.plan.delivery.rendering.json.graphs.special.WorldMap;
 import com.djrapitops.plan.delivery.rendering.json.graphs.stack.StackGraph;
@@ -57,7 +56,7 @@ import com.djrapitops.plan.storage.database.queries.analysis.PlayerCountQueries;
 import com.djrapitops.plan.storage.database.queries.objects.*;
 import com.djrapitops.plan.storage.database.sql.tables.JoinAddressTable;
 import com.djrapitops.plan.utilities.comparators.DateHolderOldestComparator;
-import com.djrapitops.plan.utilities.comparators.PieSliceComparator;
+import com.djrapitops.plan.utilities.dev.Untrusted;
 import com.djrapitops.plan.utilities.java.Lists;
 import com.djrapitops.plan.utilities.java.Maps;
 import net.playeranalytics.plugin.scheduling.TimeAmount;
@@ -457,34 +456,6 @@ public class GraphJSONCreator {
                 .build();
     }
 
-    public Map<String, Object> playerHostnamePieJSONAsMap() {
-        String[] pieColors = theme.getPieColors(ThemeVal.GRAPH_WORLD_PIE);
-        Map<String, Integer> joinAddresses = dbSystem.getDatabase().query(JoinAddressQueries.latestJoinAddresses());
-
-        translateUnknown(joinAddresses);
-
-        List<PieSlice> slices = graphs.pie().joinAddressPie(joinAddresses).getSlices();
-        slices.sort(new PieSliceComparator());
-        return Maps.builder(String.class, Object.class)
-                .put("colors", pieColors)
-                .put("slices", slices)
-                .build();
-    }
-
-    public Map<String, Object> playerHostnamePieJSONAsMap(ServerUUID serverUUID) {
-        String[] pieColors = theme.getPieColors(ThemeVal.GRAPH_WORLD_PIE);
-        Map<String, Integer> joinAddresses = dbSystem.getDatabase().query(JoinAddressQueries.latestJoinAddresses(serverUUID));
-
-        translateUnknown(joinAddresses);
-
-        List<PieSlice> slices = graphs.pie().joinAddressPie(joinAddresses).getSlices();
-        slices.sort(new PieSliceComparator());
-        return Maps.builder(String.class, Object.class)
-                .put("colors", pieColors)
-                .put("slices", slices)
-                .build();
-    }
-
     public void translateUnknown(Map<String, Integer> joinAddresses) {
         Integer unknown = joinAddresses.get(JoinAddressTable.DEFAULT_VALUE_FOR_LOOKUP);
         if (unknown != null) {
@@ -493,18 +464,44 @@ public class GraphJSONCreator {
         }
     }
 
-    public Map<String, Object> joinAddressesByDay(ServerUUID serverUUID, long after, long before) {
+    public Map<String, Object> joinAddressesByDay(ServerUUID serverUUID, long after, long before, @Untrusted List<String> addressFilter) {
         String[] pieColors = theme.getPieColors(ThemeVal.GRAPH_WORLD_PIE);
-        List<DateObj<Map<String, Integer>>> joinAddresses = dbSystem.getDatabase().query(JoinAddressQueries.joinAddressesPerDay(serverUUID, config.getTimeZone().getOffset(System.currentTimeMillis()), after, before));
+        List<DateObj<Map<String, Integer>>> joinAddresses = dbSystem.getDatabase().query(JoinAddressQueries.joinAddressesPerDay(serverUUID, config.getTimeZone().getOffset(System.currentTimeMillis()), after, before, addressFilter));
 
         return mapToJson(pieColors, joinAddresses);
     }
 
-    public Map<String, Object> joinAddressesByDay(long after, long before) {
+    public Map<String, Object> joinAddressesByDay(long after, long before, @Untrusted List<String> addressFilter) {
         String[] pieColors = theme.getPieColors(ThemeVal.GRAPH_WORLD_PIE);
-        List<DateObj<Map<String, Integer>>> joinAddresses = dbSystem.getDatabase().query(JoinAddressQueries.joinAddressesPerDay(config.getTimeZone().getOffset(System.currentTimeMillis()), after, before));
+        List<DateObj<Map<String, Integer>>> joinAddresses = dbSystem.getDatabase().query(JoinAddressQueries.joinAddressesPerDay(config.getTimeZone().getOffset(System.currentTimeMillis()), after, before, addressFilter));
 
         return mapToJson(pieColors, joinAddresses);
+    }
+
+    private static void removeFilteredAddresses(List<JoinAddressCount> addresses, List<String> filteredJoinAddresses) {
+        if (filteredJoinAddresses.isEmpty() || filteredJoinAddresses.equals(List.of("play.example.com"))) return;
+
+        List<JoinAddressCount> addressesToRemove = addresses.stream()
+                .filter(address -> filteredJoinAddresses.contains(address.getJoinAddress()))
+                .collect(Collectors.toList());
+
+        if (!addressesToRemove.isEmpty()) {
+            Optional<JoinAddressCount> foundUnknownAddressCount = addresses.stream()
+                    .filter(address -> address.getJoinAddress().equals(JoinAddressTable.DEFAULT_VALUE_FOR_LOOKUP))
+                    .findFirst();
+            JoinAddressCount unknownAddressCount;
+            if (foundUnknownAddressCount.isEmpty()) {
+                unknownAddressCount = new JoinAddressCount(JoinAddressTable.DEFAULT_VALUE_FOR_LOOKUP, 0);
+                addresses.add(unknownAddressCount);
+            } else {
+                unknownAddressCount = foundUnknownAddressCount.get();
+            }
+
+            for (JoinAddressCount toRemove : addressesToRemove) {
+                unknownAddressCount.setCount(unknownAddressCount.getCount() + toRemove.getCount());
+                addresses.remove(toRemove);
+            }
+        }
     }
 
     private Map<String, Object> mapToJson(String[] pieColors, List<DateObj<Map<String, Integer>>> joinAddresses) {
@@ -512,14 +509,20 @@ public class GraphJSONCreator {
             translateUnknown(addressesByDate.getValue());
         }
 
+        List<String> filteredJoinAddresses = config.get(DataGatheringSettings.FILTER_JOIN_ADDRESSES);
+
         List<JoinAddressCounts> joinAddressCounts = joinAddresses.stream()
-                .map(addressesOnDay -> new JoinAddressCounts(
-                        addressesOnDay.getDate(),
-                        addressesOnDay.getValue().entrySet()
-                                .stream()
-                                .map(JoinAddressCount::new)
-                                .sorted()
-                                .collect(Collectors.toList())))
+                .map(addressesOnDay -> {
+                    List<JoinAddressCount> addresses = addressesOnDay.getValue().entrySet()
+                            .stream()
+                            .map(JoinAddressCount::new)
+                            .sorted()
+                            .collect(Collectors.toList());
+
+                    removeFilteredAddresses(addresses, filteredJoinAddresses);
+
+                    return new JoinAddressCounts(addressesOnDay.getDate(), addresses);
+                })
                 .sorted(new DateHolderOldestComparator())
                 .collect(Collectors.toList());
 
@@ -537,7 +540,7 @@ public class GraphJSONCreator {
         List<ServerSpecificLineGraph> proxyGraphs = new ArrayList<>();
         for (Server proxy : db.query(ServerQueries.fetchProxyServers())) {
             ServerUUID proxyUUID = proxy.getUuid();
-            List<Double[]> points = Lists.map(
+            List<Number[]> points = Lists.map(
                     db.query(TPSQueries.fetchPlayersOnlineOfServer(halfYearAgo, now, proxyUUID)),
                     point -> Point.fromDateObj(point).toArray()
             );

@@ -16,6 +16,7 @@
  */
 package com.djrapitops.plan.gathering.listeners.bukkit;
 
+import com.djrapitops.plan.gathering.JoinAddressValidator;
 import com.djrapitops.plan.gathering.cache.JoinAddressCache;
 import com.djrapitops.plan.gathering.domain.BukkitPlayerData;
 import com.djrapitops.plan.gathering.domain.event.PlayerJoin;
@@ -28,6 +29,8 @@ import com.djrapitops.plan.identification.ServerUUID;
 import com.djrapitops.plan.storage.database.DBSystem;
 import com.djrapitops.plan.storage.database.transactions.events.BanStatusTransaction;
 import com.djrapitops.plan.storage.database.transactions.events.KickStoreTransaction;
+import com.djrapitops.plan.storage.database.transactions.events.StoreAllowlistBounceTransaction;
+import com.djrapitops.plan.utilities.dev.Untrusted;
 import com.djrapitops.plan.utilities.logging.ErrorContext;
 import com.djrapitops.plan.utilities.logging.ErrorLogger;
 import org.bukkit.event.EventHandler;
@@ -50,6 +53,7 @@ public class PlayerOnlineListener implements Listener {
 
     private final PlayerJoinEventConsumer playerJoinEventConsumer;
     private final PlayerLeaveEventConsumer playerLeaveEventConsumer;
+    private final JoinAddressValidator joinAddressValidator;
     private final JoinAddressCache joinAddressCache;
 
     private final ServerInfo serverInfo;
@@ -61,6 +65,7 @@ public class PlayerOnlineListener implements Listener {
     public PlayerOnlineListener(
             PlayerJoinEventConsumer playerJoinEventConsumer,
             PlayerLeaveEventConsumer playerLeaveEventConsumer,
+            JoinAddressValidator joinAddressValidator,
             JoinAddressCache joinAddressCache,
             ServerInfo serverInfo,
             DBSystem dbSystem,
@@ -69,6 +74,7 @@ public class PlayerOnlineListener implements Listener {
     ) {
         this.playerJoinEventConsumer = playerJoinEventConsumer;
         this.playerLeaveEventConsumer = playerLeaveEventConsumer;
+        this.joinAddressValidator = joinAddressValidator;
         this.joinAddressCache = joinAddressCache;
         this.serverInfo = serverInfo;
         this.dbSystem = dbSystem;
@@ -82,18 +88,14 @@ public class PlayerOnlineListener implements Listener {
             UUID playerUUID = event.getPlayer().getUniqueId();
             ServerUUID serverUUID = serverInfo.getServerUUID();
             boolean banned = PlayerLoginEvent.Result.KICK_BANNED == event.getResult();
+            boolean notWhitelisted = PlayerLoginEvent.Result.KICK_WHITELIST == event.getResult();
 
-            String address = event.getHostname();
-            if (!address.isEmpty()) {
-                if (address.contains(":")) {
-                    address = address.substring(0, address.lastIndexOf(':'));
-                }
-                if (address.contains("\u0000")) {
-                    address = address.substring(0, address.indexOf('\u0000'));
-                }
-                if (address.contains("fml")) {
-                    address = address.substring(0, address.lastIndexOf("fml"));
-                }
+            if (notWhitelisted) {
+                dbSystem.getDatabase().executeTransaction(new StoreAllowlistBounceTransaction(playerUUID, event.getPlayer().getName(), serverUUID, System.currentTimeMillis()));
+            }
+
+            @Untrusted String address = joinAddressValidator.sanitize(event.getHostname());
+            if (joinAddressValidator.isValid(address)) {
                 joinAddressCache.put(playerUUID, address);
             }
             dbSystem.getDatabase().executeTransaction(new BanStatusTransaction(playerUUID, serverUUID, banned));

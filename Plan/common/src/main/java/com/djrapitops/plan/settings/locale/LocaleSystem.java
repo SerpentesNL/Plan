@@ -108,7 +108,7 @@ public class LocaleSystem implements SubSystem {
                 HtmlLang.values(),
                 JSLang.values(),
                 PluginLang.values(),
-                WebPermission.values(),
+                WebPermission.nonDeprecatedValues(),
         };
     }
 
@@ -215,7 +215,7 @@ public class LocaleSystem implements SubSystem {
         }
     }
 
-    private Optional<Locale> loadSettingLocale() {
+    public Optional<Locale> loadSettingLocale() {
         try {
             String setting = config.get(PluginSettings.LOCALE);
             if ("write-all".equalsIgnoreCase(setting)) {

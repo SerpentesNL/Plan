@@ -30,6 +30,7 @@ import com.djrapitops.plan.settings.config.paths.WebserverSettings;
 import com.djrapitops.plan.storage.database.Database;
 import com.djrapitops.plan.storage.database.queries.objects.ServerQueries;
 import com.djrapitops.plan.storage.database.transactions.StoreServerInformationTransaction;
+import com.djrapitops.plan.storage.database.transactions.commands.RemoveWebGroupsTransaction;
 import com.djrapitops.plan.storage.database.transactions.commands.StoreWebUserTransaction;
 import com.djrapitops.plan.storage.database.transactions.events.StoreServerPlayerTransaction;
 import com.djrapitops.plan.storage.database.transactions.webuser.StoreWebGroupTransaction;
@@ -94,6 +95,8 @@ class AccessControlVisibilityTest {
 
     @AfterEach
     void tearDownTest(WebDriver driver) {
+        String address = "https://localhost:" + TEST_PORT_NUMBER + "/auth/logout";
+        driver.get(address);
         SeleniumExtension.newTab(driver);
         driver.manage().deleteAllCookies();
     }
@@ -136,12 +139,12 @@ class AccessControlVisibilityTest {
                 Arguments.arguments(WebPermission.PAGE_SERVER_PLAYER_VERSUS_OVERVIEW, "pvp-pve-as-numbers", "pvppve"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_PLAYER_VERSUS_OVERVIEW, "pvp-pve-insights", "pvppve"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_PLAYER_VERSUS_KILL_LIST, "pvp-kills-table", "pvppve"),
+                Arguments.arguments(WebPermission.PAGE_SERVER_ALLOWLIST_BOUNCE, "allowlist-bounce-table", "allowlist"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_PLAYERBASE_OVERVIEW, "playerbase-trends", "playerbase"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_PLAYERBASE_OVERVIEW, "playerbase-insights", "playerbase"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_PLAYERBASE_GRAPHS, "playerbase-graph", "playerbase"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_PLAYERBASE_GRAPHS, "playerbase-current", "playerbase"),
-                Arguments.arguments(WebPermission.PAGE_SERVER_JOIN_ADDRESSES_GRAPHS_TIME, "join-address-graph", "join-addresses"),
-                Arguments.arguments(WebPermission.PAGE_SERVER_JOIN_ADDRESSES_GRAPHS_PIE, "join-address-groups", "join-addresses"),
+                Arguments.arguments(WebPermission.PAGE_SERVER_JOIN_ADDRESSES_GRAPHS_TIME, "server-join-addresses", "join-addresses"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_RETENTION, "retention-graph", "retention"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_PLAYERS, "players-table", "players"),
                 Arguments.arguments(WebPermission.PAGE_SERVER_GEOLOCATIONS_MAP, "geolocations", "geolocations"),
@@ -171,8 +174,7 @@ class AccessControlVisibilityTest {
                 Arguments.arguments(WebPermission.PAGE_NETWORK_PLAYERBASE_OVERVIEW, "playerbase-insights", "playerbase"),
                 Arguments.arguments(WebPermission.PAGE_NETWORK_PLAYERBASE_GRAPHS, "playerbase-graph", "playerbase"),
                 Arguments.arguments(WebPermission.PAGE_NETWORK_PLAYERBASE_GRAPHS, "playerbase-current", "playerbase"),
-                Arguments.arguments(WebPermission.PAGE_NETWORK_JOIN_ADDRESSES_GRAPHS_TIME, "join-address-graph", "join-addresses"),
-                Arguments.arguments(WebPermission.PAGE_NETWORK_JOIN_ADDRESSES_GRAPHS_PIE, "join-address-groups", "join-addresses"),
+                Arguments.arguments(WebPermission.PAGE_NETWORK_JOIN_ADDRESSES_GRAPHS_TIME, "network-join-addresses", "join-addresses"),
                 Arguments.arguments(WebPermission.PAGE_NETWORK_RETENTION, "retention-graph", "retention"),
                 Arguments.arguments(WebPermission.PAGE_NETWORK_PLAYERS, "players-table", "players"),
                 Arguments.arguments(WebPermission.PAGE_NETWORK_GEOLOCATIONS_MAP, "geolocations", "geolocations"),
@@ -207,6 +209,8 @@ class AccessControlVisibilityTest {
     @ParameterizedTest(name = "Access with visibility {0} can see element #{1} in /{2}")
     @MethodSource("pageLevelVisibleCases")
     void pageVisible(WebPermission permission, String element, String page, Database database, ServerUUID serverUUID, ChromeDriver driver) throws Exception {
+        // TODO Remove after fixing manage/groups making bazillion calls to /v1/permissions
+        database.executeTransaction(new RemoveWebGroupsTransaction()).get();
         User user = registerUser(database, permission);
 
         String address = "https://localhost:" + TEST_PORT_NUMBER + "/" + page;
@@ -286,7 +290,7 @@ class AccessControlVisibilityTest {
         driver.get(address);
         login(driver, user);
 
-        SeleniumExtension.waitForElementToBeVisible(By.id("wrapper"), driver);
+        SeleniumExtension.waitForElementToBeVisible(By.className("login-username"), driver);
         By id = By.id(element);
         assertThrows(NoSuchElementException.class, () -> driver.findElement(id), () -> "Saw element #" + element + " at " + address + " without permission to");
         assertNoLogs(driver, address);
@@ -328,7 +332,7 @@ class AccessControlVisibilityTest {
         driver.get(address);
         login(driver, user);
 
-        SeleniumExtension.waitForElementToBeVisible(By.id("wrapper"), driver);
+        SeleniumExtension.waitForElementToBeVisible(By.className("login-username"), driver);
         By id = By.id(element);
         assertThrows(NoSuchElementException.class, () -> driver.findElement(id), () -> "Saw element #" + element + " at " + address + " without permission to");
         assertNoLogs(driver, address);
@@ -361,7 +365,7 @@ class AccessControlVisibilityTest {
         driver.get(address);
         login(driver, user);
 
-        SeleniumExtension.waitForElementToBeVisible(By.id("wrapper"), driver);
+        SeleniumExtension.waitForElementToBeVisible(By.className("login-username"), driver);
         By id = By.id(element);
         assertThrows(NoSuchElementException.class, () -> driver.findElement(id), () -> "Saw element #" + element + " at " + address + " without permission to");
         assertNoLogs(driver, address);
@@ -407,7 +411,7 @@ class AccessControlVisibilityTest {
         driver.get(address);
         login(driver, playerUser);
 
-        SeleniumExtension.waitForElementToBeVisible(By.id("wrapper"), driver);
+        SeleniumExtension.waitForElementToBeVisible(By.className("login-username"), driver);
         By id = By.id(element);
         assertThrows(NoSuchElementException.class, () -> driver.findElement(id), () -> "Saw element #" + element + " at /player/" + TestConstants.PLAYER_TWO_UUID + " without permission to");
     }
