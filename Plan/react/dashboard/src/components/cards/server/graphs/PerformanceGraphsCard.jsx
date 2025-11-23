@@ -1,4 +1,4 @@
-import {useParams} from "react-router-dom";
+import {useParams} from "react-router";
 import {useDataRequest} from "../../../../hooks/dataFetchHook";
 import {fetchOptimizedPerformance, fetchPingGraph, fetchPluginHistory} from "../../../../service/serverService";
 import {ErrorViewBody} from "../../../../views/ErrorView";
@@ -16,6 +16,7 @@ import DiskPerformanceGraph from "../../../graphs/performance/DiskPerformanceGra
 import PingGraph from "../../../graphs/performance/PingGraph";
 import {mapPerformanceDataToSeries} from "../../../../util/graphs";
 import {useAuth} from "../../../../hooks/authenticationHook";
+import {GraphExtremesContextProvider} from "../../../../hooks/interaction/graphExtremesContextHook.jsx";
 
 const AllGraphTab = ({data, dataSeries, pluginHistorySeries, loadingError}) => {
     if (loadingError) return <ErrorViewBody error={loadingError}/>
@@ -67,7 +68,7 @@ const PingGraphTab = ({identifier}) => {
 
 const PerformanceGraphsCard = () => {
     const {t} = useTranslation();
-    const {authRequired, hasPermission} = useAuth();
+    const {authRequired, hasPermission, hasChildPermission} = useAuth();
 
     const {identifier} = useParams();
     const {data, loadingError} = useDataRequest(fetchOptimizedPerformance, [identifier]);
@@ -76,7 +77,7 @@ const PerformanceGraphsCard = () => {
         data: pluginHistory,
         loadingError: pluginHistoryLoadingError
     } = useDataRequest(fetchPluginHistory, [identifier], authRequired && hasPermission('page.server.plugin.history'));
-    const [pluginHistorySeries, setPluginHistorySeries] = useState({});
+    const [pluginHistorySeries, setPluginHistorySeries] = useState(undefined);
 
     useEffect(() => {
         if (data) {
@@ -100,6 +101,7 @@ const PerformanceGraphsCard = () => {
                     exposeAsGroupOnly: true,
                     description: t('html.label.pluginVersionHistory')
                 },
+                name: t('html.label.pluginHistory'),
                 tooltip: {headerFormat: ''},
                 data: Object.entries(grouped).map(entry => {
                     const installedLines = entry[1].filter(p => p.version).map(plugin => plugin.name + ': ' + plugin.version).join(', <br>');
@@ -108,40 +110,49 @@ const PerformanceGraphsCard = () => {
                         x: entry[0],
                         title: entry[1].length,
                         text: (installedLines.length ? '<b>' + t('html.label.installed') + '</b><br>' + installedLines : '') +
-                            (uninstalledLines.length ? '<b>' + t('html.label.uninstalled') + '</b><br>' + uninstalledLines : '')
+                            (uninstalledLines.length ? '<br><b>' + t('html.label.uninstalled') + '</b><br>' + uninstalledLines : '')
                     }
                 })
             })
         }
     }, [pluginHistory, setPluginHistorySeries, t]);
 
+    const tabs = [
+        {
+            name: t('html.label.all'), icon: faGears, color: 'chunks', href: 'all',
+            element: <AllGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
+                                  loadingError={loadingError || pluginHistoryLoadingError}/>,
+            permission: 'page.server.performance.graphs'
+        }, {
+            name: t('html.label.tps'), icon: faTachometerAlt, color: 'tps', href: 'tps',
+            element: <TpsGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
+                                  loadingError={loadingError || pluginHistoryLoadingError}/>,
+            permission: 'page.server.performance.graphs.tps'
+        }, {
+            name: t('html.label.cpuRam'), icon: faMicrochip, color: 'ram', href: 'cpu-ram',
+            element: <CpuRamGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
+                                     loadingError={loadingError || pluginHistoryLoadingError}/>,
+            permission: ['page.server.performance.graphs.cpu', 'page.server.performance.graphs.ram']
+        }, {
+            name: t('html.label.world'), icon: faMap, color: 'entities', href: 'world-load',
+            element: <WorldGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
+                                    loadingError={loadingError || pluginHistoryLoadingError}/>,
+            permission: ['page.server.performance.graphs.entities', 'page.server.performance.graphs.chunks']
+        }, {
+            name: t('html.label.ping'), icon: faSignal, color: 'ping', href: 'ping',
+            element: <PingGraphTab identifier={identifier}/>,
+            permission: 'page.server.performance.graphs.ping'
+        }, {
+            name: t('html.label.diskSpace'), icon: faHdd, color: 'disk', href: 'disk',
+            element: <DiskGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
+                                   loadingError={loadingError || pluginHistoryLoadingError}/>,
+            permission: 'page.server.performance.graphs.disk'
+        },
+    ].filter(tab => hasChildPermission(tab.permission));
     return <Card id={"performance-graphs"}>
-        <CardTabs tabs={[
-            {
-                name: t('html.label.all'), icon: faGears, color: 'blue-grey', href: 'all',
-                element: <AllGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
-                                      loadingError={loadingError || pluginHistoryLoadingError}/>
-            }, {
-                name: t('html.label.tps'), icon: faTachometerAlt, color: 'red', href: 'tps',
-                element: <TpsGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
-                                      loadingError={loadingError || pluginHistoryLoadingError}/>
-            }, {
-                name: t('html.label.cpuRam'), icon: faMicrochip, color: 'light-green', href: 'cpu-ram',
-                element: <CpuRamGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
-                                         loadingError={loadingError || pluginHistoryLoadingError}/>
-            }, {
-                name: t('html.label.world'), icon: faMap, color: 'purple', href: 'world-load',
-                element: <WorldGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
-                                        loadingError={loadingError || pluginHistoryLoadingError}/>
-            }, {
-                name: t('html.label.ping'), icon: faSignal, color: 'amber', href: 'ping',
-                element: <PingGraphTab identifier={identifier}/>
-            }, {
-                name: t('html.label.diskSpace'), icon: faHdd, color: 'green', href: 'disk',
-                element: <DiskGraphTab data={data} dataSeries={parsedData} pluginHistorySeries={pluginHistorySeries}
-                                       loadingError={loadingError || pluginHistoryLoadingError}/>
-            },
-        ]}/>
+        <GraphExtremesContextProvider>
+            <CardTabs tabs={tabs}/>
+        </GraphExtremesContextProvider>
     </Card>
 }
 

@@ -41,7 +41,6 @@ import com.djrapitops.plan.settings.config.paths.TimeSettings;
 import com.djrapitops.plan.settings.locale.Locale;
 import com.djrapitops.plan.settings.locale.lang.GenericLang;
 import com.djrapitops.plan.settings.locale.lang.HtmlLang;
-import com.djrapitops.plan.settings.theme.Theme;
 import com.djrapitops.plan.settings.theme.ThemeVal;
 import com.djrapitops.plan.storage.database.DBSystem;
 import com.djrapitops.plan.storage.database.Database;
@@ -53,12 +52,14 @@ import com.djrapitops.plan.storage.database.queries.objects.playertable.ServerTa
 import com.djrapitops.plan.storage.database.sql.tables.JoinAddressTable;
 import com.djrapitops.plan.utilities.comparators.SessionStartComparator;
 import com.djrapitops.plan.utilities.dev.Untrusted;
+import com.djrapitops.plan.utilities.java.Lists;
 import com.djrapitops.plan.utilities.java.Maps;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -74,7 +75,6 @@ public class JSONFactory {
     private final DBSystem dbSystem;
     private final ServerInfo serverInfo;
     private final ServerUptimeCalculator serverUptimeCalculator;
-    private final Theme theme;
     private final Graphs graphs;
     private final Formatters formatters;
 
@@ -85,7 +85,6 @@ public class JSONFactory {
             DBSystem dbSystem,
             ServerInfo serverInfo,
             ServerUptimeCalculator serverUptimeCalculator,
-            Theme theme,
             Graphs graphs,
             Formatters formatters
     ) {
@@ -94,7 +93,6 @@ public class JSONFactory {
         this.dbSystem = dbSystem;
         this.serverInfo = serverInfo;
         this.serverUptimeCalculator = serverUptimeCalculator;
-        this.theme = theme;
         this.graphs = graphs;
         this.formatters = formatters;
     }
@@ -163,13 +161,13 @@ public class JSONFactory {
         return db.query(PlayerRetentionQueries.fetchRetentionData());
     }
 
-    private static void removeFiltered(Map<UUID, String> addressByPlayerUUID, List<String> filteredJoinAddresses) {
-        if (filteredJoinAddresses.isEmpty() || filteredJoinAddresses.equals(List.of("play.example.com"))) return;
+    private static void removeFiltered(Map<UUID, String> addressByPlayerUUID, List<Pattern> filteredJoinAddresses) {
+        if (filteredJoinAddresses.isEmpty() || filteredJoinAddresses.equals(List.of(Pattern.compile("play\\.example\\.com")))) return;
 
         Set<UUID> toRemove = new HashSet<>();
         // Remove filtered addresses from the data
         for (Map.Entry<UUID, String> entry : addressByPlayerUUID.entrySet()) {
-            if (filteredJoinAddresses.contains(entry.getValue())) {
+            if (filteredJoinAddresses.stream().anyMatch(pattern -> pattern.matcher(entry.getValue()).matches())) {
                 toRemove.add(entry.getKey());
             }
         }
@@ -180,7 +178,7 @@ public class JSONFactory {
 
     public PlayerJoinAddresses playerJoinAddresses(ServerUUID serverUUID, boolean includeByPlayerMap) {
         Database db = dbSystem.getDatabase();
-        List<String> filteredJoinAddresses = config.get(DataGatheringSettings.FILTER_JOIN_ADDRESSES);
+        List<Pattern> filteredJoinAddresses = Lists.map(config.get(DataGatheringSettings.FILTER_JOIN_ADDRESSES), Pattern::compile);
         if (includeByPlayerMap) {
             Map<UUID, String> addresses = db.query(JoinAddressQueries.latestJoinAddressesOfPlayers(serverUUID));
 
@@ -192,16 +190,20 @@ public class JSONFactory {
             );
         } else {
             List<String> addresses = db.query(JoinAddressQueries.uniqueJoinAddresses(serverUUID));
-            addresses.removeAll(filteredJoinAddresses);
+            addresses.removeIf(address ->
+                    filteredJoinAddresses.stream().anyMatch(pattern -> pattern.matcher(address).matches())
+            );
             return new PlayerJoinAddresses(addresses, null);
         }
     }
 
     public PlayerJoinAddresses playerJoinAddresses(boolean includeByPlayerMap) {
         Database db = dbSystem.getDatabase();
-        List<String> filteredJoinAddresses = config.get(DataGatheringSettings.FILTER_JOIN_ADDRESSES);
+        List<Pattern> filteredJoinAddresses = Lists.map(config.get(DataGatheringSettings.FILTER_JOIN_ADDRESSES), Pattern::compile);
         List<String> unique = db.query(JoinAddressQueries.uniqueJoinAddresses());
-        unique.removeAll(filteredJoinAddresses);
+        unique.removeIf(address ->
+                filteredJoinAddresses.stream().anyMatch(pattern -> pattern.matcher(address).matches())
+        );
         if (includeByPlayerMap) {
             Map<UUID, String> latest = db.query(JoinAddressQueries.latestJoinAddressesOfPlayers());
             removeFiltered(latest, filteredJoinAddresses);
@@ -260,7 +262,7 @@ public class JSONFactory {
 
     public List<Map<String, Object>> serverPlayerKillsAsJSONMaps(ServerUUID serverUUID) {
         Database db = dbSystem.getDatabase();
-        List<PlayerKill> kills = db.query(KillQueries.fetchPlayerKillsOnServer(serverUUID, 100));
+        List<PlayerKill> kills = db.query(KillQueries.fetchPlayerKillsOnServer(serverUUID, 50000));
         return new PlayerKillMutator(kills).toJSONAsMap(formatters);
     }
 
@@ -275,9 +277,7 @@ public class JSONFactory {
         long now = System.currentTimeMillis();
         long weekAgo = now - TimeUnit.DAYS.toMillis(7L);
 
-        Formatter<Long> year = formatters.yearLong();
         Formatter<Double> decimals = formatters.decimals();
-        Formatter<Long> timeAmount = formatters.timeAmount();
 
         Map<ServerUUID, Server> serverInformation = db.query(ServerQueries.fetchPlanServerInformation());
         ServerUUID proxyUUID = serverInformation.values().stream()
@@ -307,12 +307,12 @@ public class JSONFactory {
                     Map<String, Object> server = new HashMap<>();
                     server.put("name", entry.getValue().getIdentifiableName());
                     server.put("serverUUID", entry.getValue().getUuid().toString());
-                    server.put("playersOnlineColor", theme.getValue(ThemeVal.GRAPH_PLAYERS_ONLINE));
+                    server.put("playersOnlineColor", ThemeVal.GRAPH_PLAYERS_ONLINE.getDefaultValue());
 
                     Optional<DateObj<Integer>> recentPeak = db.query(TPSQueries.fetchPeakPlayerCount(serverUUID, now - TimeUnit.DAYS.toMillis(2L)));
                     Optional<DateObj<Integer>> allTimePeak = db.query(TPSQueries.fetchAllTimePeakPlayerCount(serverUUID));
-                    server.put("last_peak_date", recentPeak.map(DateObj::getDate).map(year).orElse("-"));
-                    server.put("best_peak_date", allTimePeak.map(DateObj::getDate).map(year).orElse("-"));
+                    server.put("last_peak_date", recentPeak.map(DateObj::getDate).map(Object.class::cast).orElse("-"));
+                    server.put("best_peak_date", allTimePeak.map(DateObj::getDate).map(Object.class::cast).orElse("-"));
                     server.put("last_peak_players", recentPeak.map(DateObj::getValue).orElse(0));
                     server.put("best_peak_players", allTimePeak.map(DateObj::getValue).orElse(0));
 
@@ -327,8 +327,8 @@ public class JSONFactory {
                     double averageTPS = tpsWeek.averageTPS();
                     server.put("avg_tps", averageTPS != -1 ? decimals.apply(averageTPS) : HtmlLang.UNIT_NO_DATA.getKey());
                     server.put("low_tps_spikes", tpsWeek.lowTpsSpikeCount(config.get(DisplaySettings.GRAPH_TPS_THRESHOLD_MED)));
-                    server.put("downtime", timeAmount.apply(tpsWeek.serverDownTime()));
-                    server.put("current_uptime", serverUptimeCalculator.getServerUptimeMillis(serverUUID).map(timeAmount)
+                    server.put("downtime", tpsWeek.serverDownTime());
+                    server.put("current_uptime", serverUptimeCalculator.getServerUptimeMillis(serverUUID).map(Object.class::cast)
                             .orElse(GenericLang.UNAVAILABLE.getKey()));
 
                     Optional<TPS> online = tpsWeek.getLast();

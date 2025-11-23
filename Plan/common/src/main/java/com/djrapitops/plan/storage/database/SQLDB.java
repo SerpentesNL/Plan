@@ -32,16 +32,17 @@ import com.djrapitops.plan.storage.database.transactions.Transaction;
 import com.djrapitops.plan.storage.database.transactions.init.CreateIndexTransaction;
 import com.djrapitops.plan.storage.database.transactions.init.CreateTablesTransaction;
 import com.djrapitops.plan.storage.database.transactions.init.OperationCriticalTransaction;
-import com.djrapitops.plan.storage.database.transactions.init.RemoveIncorrectTebexPackageDataPatch;
-import com.djrapitops.plan.storage.database.transactions.patches.*;
+import com.djrapitops.plan.storage.database.transactions.patches.Patch;
 import com.djrapitops.plan.storage.file.PlanFiles;
 import com.djrapitops.plan.utilities.java.ThrowableUtils;
 import com.djrapitops.plan.utilities.logging.ErrorContext;
 import com.djrapitops.plan.utilities.logging.ErrorLogger;
+import dev.vankka.dependencydownload.ApplicationDependencyManager;
 import dev.vankka.dependencydownload.DependencyManager;
 import dev.vankka.dependencydownload.classloader.IsolatedClassLoader;
+import dev.vankka.dependencydownload.repository.MavenRepository;
 import dev.vankka.dependencydownload.repository.Repository;
-import dev.vankka.dependencydownload.repository.StandardRepository;
+import dev.vankka.dependencydownload.resource.DependencyDownloadResource;
 import net.playeranalytics.plugin.scheduling.PluginRunnable;
 import net.playeranalytics.plugin.scheduling.RunnableFactory;
 import net.playeranalytics.plugin.scheduling.TimeAmount;
@@ -67,8 +68,8 @@ public abstract class SQLDB extends AbstractDatabase {
     private static boolean downloadDriver = true;
 
     private static final List<Repository> DRIVER_REPOSITORIES = Arrays.asList(
-            new StandardRepository("https://papermc.io/repo/repository/maven-public"),
-            new StandardRepository("https://repo1.maven.org/maven2")
+            new MavenRepository("https://repo.papermc.io/repository/maven-public"),
+            new MavenRepository("https://repo1.maven.org/maven2")
     );
 
     private final Supplier<ServerUUID> serverUUIDSupplier;
@@ -79,6 +80,7 @@ public abstract class SQLDB extends AbstractDatabase {
     protected final RunnableFactory runnableFactory;
     protected final PluginLogger logger;
     protected final ErrorLogger errorLogger;
+    protected final ApplicationDependencyManager applicationDependencyManager;
 
     protected ClassLoader driverClassLoader;
 
@@ -97,7 +99,8 @@ public abstract class SQLDB extends AbstractDatabase {
             PlanFiles files,
             RunnableFactory runnableFactory,
             PluginLogger logger,
-            ErrorLogger errorLogger
+            ErrorLogger errorLogger,
+            ApplicationDependencyManager applicationDependencyManager
     ) {
         this.serverUUIDSupplier = serverUUIDSupplier;
         this.locale = locale;
@@ -106,6 +109,7 @@ public abstract class SQLDB extends AbstractDatabase {
         this.runnableFactory = runnableFactory;
         this.logger = logger;
         this.errorLogger = errorLogger;
+        this.applicationDependencyManager = applicationDependencyManager;
 
         this.transactionExecutorServiceProvider = () -> {
             String nameFormat = "Plan " + getClass().getSimpleName() + "-transaction-thread-%d";
@@ -129,8 +133,12 @@ public abstract class SQLDB extends AbstractDatabase {
 
     public void downloadDriver() {
         if (downloadDriver) {
-            DependencyManager dependencyManager = new DependencyManager(files.getDataDirectory().resolve("libraries"));
-            dependencyManager.loadFromResource(getDependencyResource());
+            DependencyManager dependencyManager = new DependencyManager(
+                    applicationDependencyManager.getDependencyPathProvider(),
+                    applicationDependencyManager.getLogger()
+            );
+            dependencyManager.loadResource(DependencyDownloadResource.parse(getDependencyResource()));
+
             try {
                 dependencyManager.downloadAll(null, DRIVER_REPOSITORIES).get();
             } catch (InterruptedException e) {
@@ -141,6 +149,10 @@ public abstract class SQLDB extends AbstractDatabase {
 
             IsolatedClassLoader classLoader = new IsolatedClassLoader();
             dependencyManager.load(null, classLoader);
+
+            // Include this dependency manager in the application dependency manager for library cleaning purposes
+            applicationDependencyManager.include(dependencyManager);
+
             this.driverClassLoader = classLoader;
         } else {
             this.driverClassLoader = getClass().getClassLoader();
@@ -192,59 +204,7 @@ public abstract class SQLDB extends AbstractDatabase {
     }
 
     Patch[] patches() {
-        return new Patch[]{
-                new Version10Patch(),
-                new GeoInfoLastUsedPatch(),
-                new SessionAFKTimePatch(),
-                new KillsServerIDPatch(),
-                new WorldTimesSeverIDPatch(),
-                new WorldsServerIDPatch(),
-                new NicknameLastSeenPatch(),
-                new VersionTableRemovalPatch(),
-                new DiskUsagePatch(),
-                new WorldsOptimizationPatch(),
-                new KillsOptimizationPatch(),
-                new NicknamesOptimizationPatch(),
-                new TransferTableRemovalPatch(),
-                // new BadAFKThresholdValuePatch(),
-                new DeleteIPsPatch(),
-                new ExtensionShowInPlayersTablePatch(),
-                new ExtensionTableRowValueLengthPatch(),
-                new CommandUsageTableRemovalPatch(),
-                new BadNukkitRegisterValuePatch(),
-                new LinkedToSecurityTablePatch(),
-                new LinkUsersToPlayersSecurityTablePatch(),
-                new LitebansTableHeaderPatch(),
-                new UserInfoHostnamePatch(),
-                new ServerIsProxyPatch(),
-                new ServerTableRowPatch(),
-                new PlayerTableRowPatch(),
-                new ExtensionTableProviderValuesForPatch(),
-                new RemoveIncorrectTebexPackageDataPatch(),
-                new ExtensionTableProviderFormattersPatch(),
-                new ServerPlanVersionPatch(),
-                new RemoveDanglingUserDataPatch(),
-                new RemoveDanglingServerDataPatch(),
-                new GeoInfoOptimizationPatch(),
-                new PingOptimizationPatch(),
-                new UserInfoOptimizationPatch(),
-                new WorldTimesOptimizationPatch(),
-                new SessionsOptimizationPatch(),
-                new UserInfoHostnameAllowNullPatch(),
-                new RegisterDateMinimizationPatch(),
-                new UsersTableNameLengthPatch(),
-                new SessionJoinAddressPatch(),
-                new RemoveUsernameFromAccessLogPatch(),
-                new ComponentColumnToExtensionDataPatch(),
-                new BadJoinAddressDataCorrectionPatch(),
-                new AfterBadJoinAddressDataCorrectionPatch(),
-                new CorrectWrongCharacterEncodingPatch(logger, config),
-                new UpdateWebPermissionsPatch(),
-                new WebGroupDefaultGroupsPatch(),
-                new WebGroupAddMissingAdminGroupPatch(),
-                new LegacyPermissionLevelGroupsPatch(),
-                new SecurityTableGroupPatch()
-        };
+        return Patches.getAll(logger, config);
     }
 
     /**
@@ -471,6 +431,7 @@ public abstract class SQLDB extends AbstractDatabase {
         return dropUnimportantTransactions.get();
     }
 
+    @Override
     public int getTransactionQueueSize() {
         return transactionQueueSize.get();
     }

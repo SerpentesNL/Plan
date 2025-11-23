@@ -5,6 +5,7 @@ import I18NextHttpBackend from 'i18next-http-backend';
 import {initReactI18next} from 'react-i18next';
 import {fetchAvailableLocales} from "./metadataService";
 import {baseAddress, staticSite} from "./backendConfiguration";
+import {isNumber} from "../util/isNumber.js";
 
 /**
  * A locale system for localizing the website.
@@ -53,7 +54,6 @@ export const localeService = {
             if (!this.clientLocale) {
                 this.clientLocale = this.defaultLanguage;
             }
-
             let loadPath = baseAddress + '/v1/locale/{{lng}}';
             if (staticSite) loadPath = baseAddress + '/locale/{{lng}}.json'
             await i18next
@@ -99,7 +99,8 @@ export const localeService = {
         }
 
         window.localStorage.setItem("locale", langCode);
-        await i18next.changeLanguage(langCode)
+        await i18next.changeLanguage(langCode);
+        this.clientLocale = langCode;
     },
 
     getLanguages: function () {
@@ -115,5 +116,32 @@ export const localeService = {
             .map(entry => {
                 return {name: entry[0], displayName: entry[1]}
             });
+    },
+
+    getIntlFriendlyLocale: () => {
+        return localeService.clientLocale === 'CN' ? 'zh-cn' : localeService.clientLocale.toLocaleLowerCase().replace('_', '-')
+    },
+
+    localizePing: (value) => {
+        if (isNumber(value)) {
+            return new Intl.DurationFormat(localeService.getIntlFriendlyLocale(), {style: 'narrow'})
+                .format({milliseconds: 1})
+                .replace('1', value);
+        }
+        return value;
     }
 }
+
+const generateGeolocationMap = () => {
+    const regions = new Intl.DisplayNames(['en'], {type: 'region'});
+    const map = {}
+    for (let i = 0; i < 26; i++) {
+        for (let j = 0; j < 26; j++) {
+            let code = String.fromCharCode(97 + i) + String.fromCharCode(97 + j)
+            const result = regions.of(`${code}`);
+            map[result] = code;
+        }
+    }
+    return map;
+}
+export const reverseRegionLookupMap = generateGeolocationMap();

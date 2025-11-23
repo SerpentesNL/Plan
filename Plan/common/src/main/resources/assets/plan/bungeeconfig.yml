@@ -32,7 +32,7 @@ Database:
     Password: minecraft
     Database: Plan
     # Launch options to append after mysql driver address
-    Launch_options: "?rewriteBatchedStatements=true&useSSL=false&serverTimezone=UTC"
+    Launch_options: "?rewriteBatchedStatements=true&serverTimezone=UTC"
     Max_connections: 8
     Max_Lifetime:
       Time: 25
@@ -119,7 +119,7 @@ Data_gathering:
     # Does not affect already gathered data
     Preserve_case: false
     Preserve_invalid: false
-    # Replaces these join addresses with unknown
+    # Replaces these join addresses with unknown, supports regex
     Filter_out_from_data:
       - "play.example.com"
 # -----------------------------------------------------
@@ -176,6 +176,7 @@ Display_options:
   # More information about Themes:
   # https://github.com/plan-player-analytics/Plan/wiki/Themes
   Theme: default
+  Night_mode: false
   # Can use ${playerName} or ${playerUUID} or ${playerUUIDNoDash}
   Player_head_image_url: "https://crafatar.com/avatars/${playerUUID}?size=120&default=MHF_Steve&overlay"
   Sessions:
@@ -199,6 +200,7 @@ Display_options:
     Main: '&2'
     Secondary: '&7'
     Highlight: '&f'
+  WorldPie: '"#0099C6", "#66AA00", "#316395", "#994499", "#22AA99", "#AAAA11", "#6633CC", "#E67300", "#329262", "#5574A6"'
 # -----------------------------------------------------
 Formatting:
   Decimal_points: '#.##'

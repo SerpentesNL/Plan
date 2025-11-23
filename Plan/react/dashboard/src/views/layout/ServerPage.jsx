@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from "react";
 import {useTranslation} from "react-i18next";
-import {Outlet, useParams} from "react-router-dom";
+import {Outlet, useParams} from "react-router";
 import {useNavigation} from "../../hooks/navigationHook";
 import {
     faCampground,
@@ -14,6 +14,7 @@ import {
     faInfoCircle,
     faLocationArrow,
     faSearch,
+    faSignsPost,
     faUserGroup,
     faUsers,
     faUsersViewfinder
@@ -205,31 +206,30 @@ const ServerPage = () => {
         if (identityLoadingError.status === 404) return <ErrorPage
             error={{
                 title: t('html.error.404NotFound'),
-                message: t(staticSite ? 'html.error.serverNotExported' : 'html.error.serverNotSeen')
+                message: t(staticSite ? 'html.error.serverNotExported' : 'html.error.serverNotSeen'),
+                icon: faSignsPost
             }}/>
         return <ErrorPage error={identityLoadingError}/>
     }
 
     return (
-        <>
-            <ServerExtensionContextProvider identifier={identifier}>
-                <ServerSidebar/>
-                <div className="d-flex flex-column" id="content-wrapper">
-                    <Header page={displayedServerName} tab={currentTab}/>
-                    <div id="content" style={{display: 'flex'}}>
-                        <main className="container-fluid mt-4">
-                            <SwitchTransition>
-                                <Outlet/>
-                            </SwitchTransition>
-                        </main>
-                        <aside>
-                            <ColorSelectorModal/>
-                            <React.Suspense fallback={""}><HelpModal/></React.Suspense>
-                        </aside>
-                    </div>
+        <ServerExtensionContextProvider identifier={identifier}>
+            <ServerSidebar/>
+            <div className="d-flex flex-column" id="content-wrapper">
+                <Header page={displayedServerName} tab={currentTab}/>
+                <div id="content" style={{display: 'flex'}}>
+                    <main className="container-fluid mt-4">
+                        <SwitchTransition>
+                            <Outlet/>
+                        </SwitchTransition>
+                    </main>
+                    <aside>
+                        <ColorSelectorModal/>
+                        <React.Suspense fallback={""}><HelpModal/></React.Suspense>
+                    </aside>
                 </div>
-            </ServerExtensionContextProvider>
-        </>
+            </div>
+        </ServerExtensionContextProvider>
     )
 }
 

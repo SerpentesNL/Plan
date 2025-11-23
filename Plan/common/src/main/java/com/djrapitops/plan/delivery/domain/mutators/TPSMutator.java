@@ -19,6 +19,7 @@ package com.djrapitops.plan.delivery.domain.mutators;
 import com.djrapitops.plan.delivery.rendering.json.graphs.line.LineGraph;
 import com.djrapitops.plan.delivery.rendering.json.graphs.line.Point;
 import com.djrapitops.plan.gathering.domain.TPS;
+import com.djrapitops.plan.utilities.analysis.Average;
 import com.djrapitops.plan.utilities.comparators.TPSComparator;
 import com.djrapitops.plan.utilities.java.Lists;
 
@@ -118,6 +119,28 @@ public class TPSMutator {
         }
 
         return downTime;
+    }
+
+    public long serverUptime() {
+        long lastDate = -1;
+        long uptime = 0;
+        tpsData.sort(new TPSComparator());
+
+        for (TPS tps : tpsData) {
+            long date = tps.getDate();
+            if (lastDate == -1) {
+                lastDate = date;
+                continue;
+            }
+
+            long diff = date - lastDate;
+            if (diff < TimeUnit.MINUTES.toMillis(2L)) {
+                uptime += diff;
+            }
+            lastDate = date;
+        }
+
+        return uptime;
     }
 
     public long serverOccupiedTime() {
@@ -277,5 +300,13 @@ public class TPSMutator {
             arrays.add(entry);
             iterate += gapStrategy.fillFrequencyMs;
         }
+    }
+
+    public double averageMspt() {
+        Average average = new Average();
+        for (TPS tps : tpsData) {
+            average.addNonNull(tps.getMsptAverage());
+        }
+        return average.getAverageAndReset();
     }
 }

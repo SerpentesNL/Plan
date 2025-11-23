@@ -17,6 +17,7 @@
 package extension;
 
 import org.apache.commons.lang3.SystemUtils;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.extension.*;
 import org.openqa.selenium.*;
@@ -24,7 +25,6 @@ import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.logging.LogType;
 import org.openqa.selenium.logging.LoggingPreferences;
-import org.testcontainers.shaded.org.awaitility.Awaitility;
 import utilities.CIProperties;
 
 import java.io.File;
@@ -94,6 +94,7 @@ public class SeleniumExtension implements ParameterResolver, BeforeAllCallback, 
         if (System.getenv(CIProperties.CHROME_DRIVER) != null) {
             chromeOptions.setBinary("/usr/bin/google-chrome-stable");
             chromeOptions.addArguments("--headless=new");
+            chromeOptions.addArguments("--dns-prefetch-disable");
         }
 
         return new ChromeDriver(chromeOptions);

@@ -6,6 +6,7 @@ import {
     faMap,
     faMicrochip,
     faSignal,
+    faStopwatch,
     faTachometerAlt,
     faUser
 } from "@fortawesome/free-solid-svg-icons";
@@ -19,10 +20,17 @@ import LineGraph from "../../graphs/LineGraph";
 import {ErrorViewBody, ErrorViewCard} from "../../../views/ErrorView";
 import PingGraph from "../../graphs/performance/PingGraph";
 import {useMetadata} from "../../../hooks/metadataHook";
+import {getColorConverter} from "../../../util/Color.js";
+import {
+    GraphExtremesContextProvider,
+    useGraphExtremesContext
+} from "../../../hooks/interaction/graphExtremesContextHook.jsx";
 
-const Tab = ({data, yAxis}) => {
+const Tab = ({id, data, yAxis}) => {
+    const {extremes, onSetExtremes} = useGraphExtremesContext();
     return (
-        <LineGraph id={'performance-' + new Date().getTime()} series={data} legendEnabled tall yAxis={yAxis}/>
+        <LineGraph id={'performance-' + id} series={data} legendEnabled tall yAxis={yAxis} extremes={extremes}
+                   onSetExtremes={onSetExtremes}/>
     )
 }
 
@@ -46,7 +54,9 @@ const PerformanceGraphsCard = ({data}) => {
         ram: [],
         entities: [],
         chunks: [],
-        disk: []
+        disk: [],
+        msptAverage: [],
+        mspt95thPercentile: []
     });
 
     useEffect(() => {
@@ -55,23 +65,23 @@ const PerformanceGraphsCard = ({data}) => {
         const zones = {
             tps: [{
                 value: data.zones.tpsThresholdMed,
-                color: data.colors.low
+                color: "var(--color-graphs-tps-low)"
             }, {
                 value: data.zones.tpsThresholdHigh,
-                color: data.colors.med
+                color: "var(--color-graphs-tps-medium)"
             }, {
                 value: 30,
-                color: data.colors.high
+                color: "var(--color-graphs-tps-high)"
             }],
             disk: [{
                 value: data.zones.diskThresholdMed,
-                color: data.colors.low
+                color: "var(--color-graphs-disk-low)"
             }, {
                 value: data.zones.diskThresholdHigh,
-                color: data.colors.med
+                color: "var(--color-graphs-disk-medium)"
             }, {
                 value: Number.MAX_VALUE,
-                color: data.colors.high
+                color: "var(--color-graphs-disk-high)"
             }]
         };
 
@@ -92,14 +102,17 @@ const PerformanceGraphsCard = ({data}) => {
             ram: [],
             entities: [],
             chunks: [],
-            disk: []
+            disk: [],
+            msptAverage: [],
+            mspt95thPercentile: []
         }
 
         const spline = 'spline';
 
-        const changeColor = (colorHex, index) => {
-            // TODO Convert color somehow using index
-            return colorHex;
+        const changeColor = (color, index) => {
+            return getColorConverter(color)
+                .increaseHue(index * 5 / 360)
+                .toHex();
         }
 
         const minuteResolution = point => {
@@ -109,17 +122,17 @@ const PerformanceGraphsCard = ({data}) => {
         }
 
         serverData.forEach((server, i) => {
-            const playersOnlineColor = changeColor(data.colors.playersOnline, i);
-            const tpsColor = changeColor(data.colors.high, i);
-            const tpsZone = [...zones.tps]
-            tpsZone.forEach(zone => zone.color = changeColor(zone.color, i));
-            const cpuColor = changeColor(data.colors.cpu, i);
-            const ramColors = changeColor(data.colors.ram, i);
-            const entitiesColor = changeColor(data.colors.entities, i);
-            const chunksColor = changeColor(data.colors.chunks, i);
-            const diskColor = changeColor(data.colors.high, i);
-            const diskZones = [...zones.disk];
-            diskZones.forEach(zone => zone.color = changeColor(zone.color, i));
+            const playersOnlineColor = changeColor("var(--color-graphs-players-online)", i);
+            const tpsColor = changeColor("var(--color-graphs-tps-high)", i);
+            const tpsZone = zones.tps;
+            const cpuColor = changeColor("var(--color-graphs-cpu)", i);
+            const ramColors = changeColor("var(--color-graphs-ram)", i);
+            const entitiesColor = changeColor("var(--color-graphs-entities)", i);
+            const chunksColor = changeColor("var(--color-graphs-chunks)", i);
+            const diskColor = changeColor("var(--color-graphs-disk-high)", i);
+            const msptAverageColor = changeColor("var(--color-data-performance-mspt-average)", i);
+            const msptPercentileColor = changeColor("var(--color-data-performance-mspt-percentile)", i);
+            const diskZones = zones.disk;
 
             series.players.push({
                 name: server.serverName, type: spline, tooltip: tooltip.zeroDecimals,
@@ -149,43 +162,64 @@ const PerformanceGraphsCard = ({data}) => {
                 name: server.serverName, type: spline, tooltip: tooltip.zeroDecimals,
                 data: server.values.disk.map(minuteResolution), color: diskColor, zones: diskZones, yAxis: 0
             });
+            series.msptAverage.push({
+                name: server.serverName, type: spline, tooltip: tooltip.twoDecimals,
+                data: server.values.msptAverage.map(minuteResolution), color: msptAverageColor, yAxis: 0
+            });
+            series.mspt95thPercentile.push({
+                name: server.serverName, type: spline, tooltip: tooltip.twoDecimals,
+                data: server.values.mspt95thPercentile.map(minuteResolution), color: msptPercentileColor, yAxis: 0
+            });
         });
         setPerformanceSeries(series);
     }, [data, setPerformanceSeries])
 
     const dataIncludesGameServers = useMemo(() => data.servers && Boolean(data.servers.filter(server => !server.proxy).length), [data]);
 
-    const tabs = useMemo(() => [
+    const tabs = [
         {
-            name: t('html.label.playersOnline'), icon: faUser, color: 'light-blue', href: 'players-online',
-            element: <Tab data={performanceSeries.players} yAxis={yAxisConfigurations.PLAYERS_ONLINE}/>
+            name: t('html.label.playersOnline'), icon: faUser, color: 'players-online', href: 'players-online',
+            element: <Tab id={'players-online'} data={performanceSeries.players}
+                          yAxis={yAxisConfigurations.PLAYERS_ONLINE}/>
         }, {
-            name: t('html.label.tps'), icon: faTachometerAlt, color: 'red', href: 'tps',
-            element: <Tab data={performanceSeries.tps} yAxis={yAxisConfigurations.TPS}/>,
+            name: t('html.label.tps'), icon: faTachometerAlt, color: 'tps', href: 'tps',
+            element: <Tab id={'tps'} data={performanceSeries.tps} yAxis={yAxisConfigurations.TPS}/>,
             disabled: !dataIncludesGameServers
         }, {
-            name: t('html.label.cpu'), icon: faTachometerAlt, color: 'amber', href: 'cpu',
-            element: <Tab data={performanceSeries.cpu} yAxis={yAxisConfigurations.CPU}/>
-        }, {
-            name: t('html.label.ram'), icon: faMicrochip, color: 'light-green', href: 'ram',
-            element: <Tab data={performanceSeries.ram} yAxis={yAxisConfigurations.RAM_OR_DISK}/>
-        }, {
-            name: t('html.label.entities'), icon: faDragon, color: 'purple', href: 'entities',
-            element: <Tab data={performanceSeries.entities} yAxis={yAxisConfigurations.ENTITIES}/>,
+            name: t('html.label.msptAverage'), icon: faStopwatch, color: 'mspt-average', href: 'mspt',
+            element: <Tab id={'mspt'} data={performanceSeries.msptAverage} yAxis={yAxisConfigurations.MSPT}/>,
             disabled: !dataIncludesGameServers
         }, {
-            name: t('html.label.loadedChunks'), icon: faMap, color: 'blue-grey', href: 'chunks',
-            element: <Tab data={performanceSeries.chunks} yAxis={yAxisConfigurations.CHUNKS}/>,
+            name: t('html.label.msptPercentile', {percentile: 95}),
+            icon: faStopwatch,
+            color: 'mspt-percentile',
+            href: 'mspt-percentile',
+            element: <Tab id={'mspt-percentile'} data={performanceSeries.mspt95thPercentile}
+                          yAxis={yAxisConfigurations.MSPT}/>,
             disabled: !dataIncludesGameServers
         }, {
-            name: t('html.label.diskSpace'), icon: faHdd, color: 'green', href: 'disk',
-            element: <Tab data={performanceSeries.disk} yAxis={yAxisConfigurations.RAM_OR_DISK}/>
+            name: t('html.label.cpu'), icon: faTachometerAlt, color: 'cpu', href: 'cpu',
+            element: <Tab id={'cpu'} data={performanceSeries.cpu} yAxis={yAxisConfigurations.CPU}/>
         }, {
-            name: t('html.label.ping'), icon: faSignal, color: 'amber', href: 'ping',
-            element: networkMetadata ? <PingTab identifier={networkMetadata.currentServer.serverUUID}/> :
+            name: t('html.label.ram'), icon: faMicrochip, color: 'ram', href: 'ram',
+            element: <Tab id={'ram'} data={performanceSeries.ram} yAxis={yAxisConfigurations.RAM_OR_DISK}/>
+        }, {
+            name: t('html.label.entities'), icon: faDragon, color: 'entities', href: 'entities',
+            element: <Tab id={'entities'} data={performanceSeries.entities} yAxis={yAxisConfigurations.ENTITIES}/>,
+            disabled: !dataIncludesGameServers
+        }, {
+            name: t('html.label.loadedChunks'), icon: faMap, color: 'chunks', href: 'chunks',
+            element: <Tab id={'chunks'} data={performanceSeries.chunks} yAxis={yAxisConfigurations.CHUNKS}/>,
+            disabled: !dataIncludesGameServers
+        }, {
+            name: t('html.label.diskSpace'), icon: faHdd, color: 'disk', href: 'disk',
+            element: <Tab id={'disk'} data={performanceSeries.disk} yAxis={yAxisConfigurations.RAM_OR_DISK}/>
+        }, {
+            name: t('html.label.ping'), icon: faSignal, color: 'ping', href: 'ping',
+            element: networkMetadata ? <PingTab id={'ping'} identifier={networkMetadata.currentServer.serverUUID}/> :
                 <ChartLoader/>
         },
-    ], [performanceSeries, networkMetadata, t, dataIncludesGameServers]);
+    ];
 
     if (!data || !Object.values(data).length) return <CardLoader/>
     if (data.errors.length) {
@@ -193,7 +227,9 @@ const PerformanceGraphsCard = ({data}) => {
     }
     return (
         <Card>
-            <CardTabs tabs={tabs}/>
+            <GraphExtremesContextProvider>
+                <CardTabs tabs={tabs}/>
+            </GraphExtremesContextProvider>
         </Card>
     )
 };

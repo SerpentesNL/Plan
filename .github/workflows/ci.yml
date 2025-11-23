@@ -1,10 +1,22 @@
 
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 jobs:
   test:
+    if: > 
+      (
+        (github.event_name == 'push')
+        || (github.event_name == 'pull_request' && github.repository != github.event.pull_request.head.repo.full_name && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action))
+      )
+
     name: Test, Build & Upload
 
     runs-on: ubuntu-latest
@@ -22,28 +34,30 @@ jobs:
         options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
 
     steps:
-      - name: 📥 Checkout git repository
+      - if: ${{ github.event_name == 'push' }}
+        name: 📥 Checkout git repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - if: ${{ github.event_name == 'pull_request' }}
+        name: 📥 Checkout git repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
       - name: ☕ Setup JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'adopt'
+          distribution: 'temurin'
           java-version: '21'
-      - name: 💼 Load Gradle Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      - name: 💼 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: 🛠 Build jars 
         run: |
           cd Plan
-          ./gradlew shadowJar
+          ./gradlew build -x test
       - name: ⚙ Get versions
         run: |
           cd Plan
@@ -77,6 +91,12 @@ jobs:
           while ! mysqladmin ping -h"127.0.0.1" -P"$PORT" --silent; do
             sleep 1
           done
+      - name: 📶 Setup to avoid ERR_NETWORK_CHANGED
+        run: |
+          sudo resolvectl dns eth0 1.1.1.1
+          sudo resolvectl domain eth0 "~."
+          sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
       - name: 🩺 Test 
         env:
           MYSQL_DB: test
@@ -118,7 +138,7 @@ jobs:
           ./gradlew sonar -Dsonar.host.url=https://sonarcloud.io -Dsonar.organization=player-analytics-plan
       - name: 🩺 SonarCloud - React
         if: "${{ env.SONAR_TOKEN != '' }}"
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

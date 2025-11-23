@@ -114,7 +114,12 @@ public class Contributors {
             new Contributor("liuzhen932", LANG),
             new Contributor("Sniper_TVmc", LANG),
             new Contributor("mcmdev", CODE),
-            new Contributor("ZhangYuheng", CODE)
+            new Contributor("ZhangYuheng", CODE),
+            new Contributor("Zaemong", LANG),
+            new Contributor("TWJohnJohn20116", LANG),
+            new Contributor("YannicHock", CODE),
+            new Contributor("SaolGhra", CODE),
+            new Contributor("Jsinco", CODE)
     };
 
     private Contributors() {

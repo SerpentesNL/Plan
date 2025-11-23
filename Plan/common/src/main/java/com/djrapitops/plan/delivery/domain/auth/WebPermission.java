@@ -95,6 +95,15 @@ public enum WebPermission implements Supplier<String>, Lang {
     PAGE_SERVER_GEOLOCATIONS_PING_PER_COUNTRY("See Ping Per Country table"),
     PAGE_SERVER_PERFORMANCE("See Performance tab"),
     PAGE_SERVER_PERFORMANCE_GRAPHS("See Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_PLAYERS_ONLINE("See Players Online data in Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_TPS("See TPS data in Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_CPU("See CPU usage in Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_RAM("See Memory usage in Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_ENTITIES("See Entity count data in Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_CHUNKS("See Chunk count data in Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_DISK("See Disk Space usage Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_PING("See Ping data in Performance graphs"),
+    PAGE_SERVER_PERFORMANCE_GRAPHS_MSPT("See MSPT data in Performance graphs"),
     PAGE_SERVER_PERFORMANCE_OVERVIEW("See Performance numbers"),
     PAGE_SERVER_PLUGIN_HISTORY("See Plugin History"),
     PAGE_SERVER_PLUGINS("See Plugins -tabs of servers"),
@@ -118,9 +127,11 @@ public enum WebPermission implements Supplier<String>, Lang {
     ACCESS_QUERY("Allows accessing /query and Query results pages"),
     ACCESS_ERRORS("Allows accessing /errors page"),
     ACCESS_DOCS("Allows accessing /docs page"),
+    ACCESS_THEME_EDITOR("Allows accessing /theme-editor page"),
 
     MANAGE_GROUPS("Allows modifying group permissions & Access to /manage/groups page"),
-    MANAGE_USERS("Allows modifying what users belong to what group");
+    MANAGE_USERS("Allows modifying what users belong to what group"),
+    MANAGE_THEMES("Allows saving or deleting themes via theme-editor for everyone");
 
     private final String description;
     private final boolean deprecated;

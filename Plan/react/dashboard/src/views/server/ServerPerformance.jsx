@@ -1,7 +1,7 @@
 import React from 'react';
 import LoadIn from "../../components/animation/LoadIn";
 import {Col} from "react-bootstrap";
-import {useParams} from "react-router-dom";
+import {useParams} from "react-router";
 import {useDataRequest} from "../../hooks/dataFetchHook";
 import {fetchPerformanceOverview} from "../../service/serverService";
 import PerformanceGraphsCard from "../../components/cards/server/graphs/PerformanceGraphsCard";
@@ -12,10 +12,10 @@ import ExtendableRow from "../../components/layout/extension/ExtendableRow";
 import {useAuth} from "../../hooks/authenticationHook";
 
 const ServerPerformance = () => {
-    const {hasPermission} = useAuth();
+    const {hasPermission, hasChildPermission} = useAuth();
     const {identifier} = useParams();
 
-    const seeGraphs = hasPermission('page.server.performance.graphs');
+    const seeGraphs = hasChildPermission('page.server.performance.graphs');
     const seeOverview = hasPermission('page.server.performance.overview');
     const {data, loadingError} = useDataRequest(fetchPerformanceOverview, [identifier], seeOverview);
 

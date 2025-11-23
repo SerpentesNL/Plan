@@ -1,28 +1,43 @@
-export const linegraphButtons = [{
-    type: 'hour',
-    count: 12,
-    text: '12h'
-}, {
-    type: 'hour',
-    count: 24,
-    text: '24h'
-}, {
-    type: 'day',
-    count: 7,
-    text: '7d'
-}, {
-    type: 'month',
-    count: 1,
-    text: '30d'
-}, {
-    type: 'all',
-    text: 'All'
-}];
+import {localeService} from "../service/localeService.js";
 
+export const translateLinegraphButtons = (t) => {
+    const formatter = new Intl.DurationFormat(localeService.getIntlFriendlyLocale(), {
+        style: 'narrow',
+    });
+    const format = ({hours, days}) => formatter.format({
+        days: days > 0 ? Math.floor(days) : undefined,
+        hours: hours > 0 ? Math.floor(hours) : undefined
+    });
+
+    return [{
+        type: 'hour',
+        count: 12,
+        text: format({hours: 12})
+    }, {
+        type: 'hour',
+        count: 24,
+        text: format({hours: 24})
+    }, {
+        type: 'day',
+        count: 7,
+        text: format({days: 7})
+    }, {
+        type: 'month',
+        count: 1,
+        text: format({days: 30})
+    }, {
+        type: 'all',
+        text: t('html.label.all')
+    }];
+}
 export const tooltip = {
     twoDecimals: {valueDecimals: 2},
     zeroDecimals: {valueDecimals: 0}
 }
+
+export const hasValuesInSeries = series => {
+    return Boolean(series?.find(data => Boolean(data[1])))
+};
 
 export const mapPerformanceDataToSeries = performanceData => {
     const playersOnline = [];
@@ -32,6 +47,8 @@ export const mapPerformanceDataToSeries = performanceData => {
     const entities = [];
     const chunks = [];
     const disk = [];
+    const msptAverage = [];
+    const mspt95thPercentile = [];
 
     return new Promise((resolve => {
         let i = 0;
@@ -49,9 +66,11 @@ export const mapPerformanceDataToSeries = performanceData => {
                 entities[i] = [date, entry[5]];
                 chunks[i] = [date, entry[6]];
                 disk[i] = [date, entry[7]];
+                msptAverage[i] = [date, entry[8]];
+                mspt95thPercentile[i] = [date, entry[9]];
             }
             if (i >= length) {
-                resolve({playersOnline, tps, cpu, ram, entities, chunks, disk})
+                resolve({playersOnline, tps, cpu, ram, entities, chunks, disk, msptAverage, mspt95thPercentile});
             } else {
                 setTimeout(processNextThousand, 10);
             }
@@ -80,6 +99,16 @@ export const yAxisConfigurations = {
         },
         softMin: 0,
         softMax: 20
+    },
+    MSPT: {
+        opposite: true,
+        labels: {
+            formatter: function () {
+                return localeService.localizePing(this.value);
+            }
+        },
+        softMin: 0,
+        softMax: 50
     },
     CPU: {
         opposite: true,

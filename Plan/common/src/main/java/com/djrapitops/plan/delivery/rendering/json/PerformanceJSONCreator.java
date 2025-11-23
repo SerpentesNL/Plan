@@ -48,7 +48,6 @@ public class PerformanceJSONCreator implements ServerTabJSONCreator<Map<String, 
     private final DBSystem dbSystem;
 
     private final Formatter<Double> decimals;
-    private final Formatter<Long> timeAmount;
     private final Formatter<Double> percentage;
     private final Formatter<Double> byteSize;
 
@@ -63,7 +62,6 @@ public class PerformanceJSONCreator implements ServerTabJSONCreator<Map<String, 
 
         decimals = formatters.decimals();
         percentage = formatters.percentage();
-        timeAmount = formatters.timeAmount();
         byteSize = formatters.byteSize();
     }
 
@@ -96,9 +94,13 @@ public class PerformanceJSONCreator implements ServerTabJSONCreator<Map<String, 
         numbers.put("low_tps_spikes_7d", tpsDataWeek.lowTpsSpikeCount(tpsThreshold));
         numbers.put("low_tps_spikes_24h", tpsDataDay.lowTpsSpikeCount(tpsThreshold));
 
-        numbers.put("server_downtime_30d", timeAmount.apply(tpsDataMonth.serverDownTime()));
-        numbers.put("server_downtime_7d", timeAmount.apply(tpsDataWeek.serverDownTime()));
-        numbers.put("server_downtime_24h", timeAmount.apply(tpsDataDay.serverDownTime()));
+        numbers.put("server_downtime_30d", tpsDataMonth.serverDownTime());
+        numbers.put("server_downtime_7d", tpsDataWeek.serverDownTime());
+        numbers.put("server_downtime_24h", tpsDataDay.serverDownTime());
+
+        numbers.put("server_uptime_30d", tpsDataMonth.serverUptime());
+        numbers.put("server_uptime_7d", tpsDataWeek.serverUptime());
+        numbers.put("server_uptime_24h", tpsDataDay.serverUptime());
 
         numbers.put("players_30d", format(tpsDataMonth.averagePlayers()));
         numbers.put("players_7d", format(tpsDataWeek.averagePlayers()));
@@ -125,6 +127,10 @@ public class PerformanceJSONCreator implements ServerTabJSONCreator<Map<String, 
         numbers.put("min_disk_30d", formatBytes(tpsDataMonth.minFreeDisk()));
         numbers.put("min_disk_7d", formatBytes(tpsDataWeek.minFreeDisk()));
         numbers.put("min_disk_24h", formatBytes(tpsDataDay.minFreeDisk()));
+
+        numbers.put("mspt_average_30d", format(tpsDataMonth.averageMspt()));
+        numbers.put("mspt_average_7d", format(tpsDataWeek.averageMspt()));
+        numbers.put("mspt_average_24h", format(tpsDataDay.averageMspt()));
 
         return numbers;
     }
@@ -153,11 +159,13 @@ public class PerformanceJSONCreator implements ServerTabJSONCreator<Map<String, 
         double averageCPU = lowTPS.averageCPU();
         double averageEntities = lowTPS.averageEntities();
         double averageChunks = lowTPS.averageChunks();
+        double averageMspt = lowTPS.averageMspt();
         insights.put("low_tps_players", avgPlayersOnline != -1 ? decimals.apply(avgPlayersOnline) : HtmlLang.TEXT_NO_LOW_TPS.getKey());
         insights.put("low_tps_tps", averageTPS != -1 ? decimals.apply(averageTPS) : "-");
         insights.put("low_tps_cpu", averageCPU != -1 ? decimals.apply(averageCPU) : "-");
         insights.put("low_tps_entities", averageEntities != -1 ? decimals.apply(averageEntities) : "-");
         insights.put("low_tps_chunks", averageChunks != -1 ? decimals.apply(averageChunks) : "-");
+        insights.put("low_tps_mspt", averageMspt > 0 ? decimals.apply(averageMspt) : "-");
 
         return insights;
     }
